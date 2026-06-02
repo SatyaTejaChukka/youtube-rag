@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Provider APIs are supplied via headers or can be added here as defaults
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - LLM_PROVIDER=groq
+      - CHROMA_PERSIST_DIR=/app/chroma_db
+      - SQLITE_DB_PATH=/app/app.db
+    volumes:
+      # Persist SQLite and ChromaDB data
+      - tuberag_db:/app/app.db
+      - tuberag_chroma:/app/chroma_db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  tuberag_db:
+  tuberag_chroma:
