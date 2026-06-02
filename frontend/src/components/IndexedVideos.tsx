@@ -8,9 +8,10 @@ import { SkeletonVideoItem } from './ui/Skeleton';
 interface Props {
   sourceId: string;
   refreshKey?: number;
+  onSelectVideo?: (video: VideoSummary) => void;
 }
 
-export default function IndexedVideos({ sourceId, refreshKey = 0 }: Props) {
+export default function IndexedVideos({ sourceId, refreshKey = 0, onSelectVideo }: Props) {
   const [videos, setVideos] = useState<VideoSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,7 +66,7 @@ export default function IndexedVideos({ sourceId, refreshKey = 0 }: Props) {
       <div className="space-y-0.5 px-2">
         {videos.map((video, index) => (
           <div key={video.video_id} className="fade-in-up" style={{ animationDelay: `${index * 0.03}s` }}>
-            <VideoListItem video={video} />
+            <VideoListItem video={video} onSelect={onSelectVideo} />
           </div>
         ))}
       </div>

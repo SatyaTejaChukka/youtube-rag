@@ -8,6 +8,7 @@ import TypingIndicator from './TypingIndicator';
 
 interface Props {
   sourceId: string;
+  onSelectSource?: (videoId: string, videoTitle: string, startSeconds: number) => void;
 }
 
 function newId() {
@@ -44,7 +45,7 @@ function ChatEmptyHint() {
   );
 }
 
-export default function ChatWindow({ sourceId }: Props) {
+export default function ChatWindow({ sourceId, onSelectSource }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -156,7 +157,7 @@ export default function ChatWindow({ sourceId }: Props) {
           ) : (
             <div className="space-y-6">
               {messages.map((message, index) => (
-                <MessageBubble key={message.id} message={message} index={index} />
+                <MessageBubble key={message.id} message={message} index={index} onSelectSource={onSelectSource} />
               ))}
               {loading && <TypingIndicator />}
               <div ref={bottomRef} className="h-4" />

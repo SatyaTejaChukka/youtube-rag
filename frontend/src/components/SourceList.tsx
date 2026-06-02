@@ -5,11 +5,12 @@ import SourceCard from './SourceCard';
 
 interface Props {
   sources: SourceReference[];
+  onSelectSource?: (videoId: string, videoTitle: string, startSeconds: number) => void;
 }
 
 const INITIAL_SHOW = 3;
 
-export default function SourceList({ sources }: Props) {
+export default function SourceList({ sources, onSelectSource }: Props) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? sources : sources.slice(0, INITIAL_SHOW);
   const hidden = sources.length - INITIAL_SHOW;
@@ -22,7 +23,7 @@ export default function SourceList({ sources }: Props) {
           className="fade-in-up"
           style={{ animationDelay: `${index * 0.06 + 0.1}s` }}
         >
-          <SourceCard source={source} />
+          <SourceCard source={source} onSelect={onSelectSource} />
         </div>
       ))}
 
@@ -42,3 +43,4 @@ export default function SourceList({ sources }: Props) {
     </div>
   );
 }
+

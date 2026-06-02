@@ -10,7 +10,7 @@ Rules:
 2. If the answer cannot be found in the excerpts, say exactly: "I couldn't find relevant information about this in the indexed videos."
 3. Be concise and clear - 3 to 6 sentences is ideal.
 4. Do not speculate or add information from your general training knowledge.
-5. When referencing information, you may naturally cite the video title or timestamp if it adds clarity.
+5. Write naturally flowing prose. Do NOT reproduce or reference internal markers like [CTX-1], timestamps, or excerpt numbers in your answer.
 """
 
 
@@ -19,12 +19,12 @@ def format_context(chunks: list[dict]) -> str:
     for index, chunk in enumerate(chunks, 1):
         meta = chunk["metadata"]
         lines.append(
-            f"[Excerpt {index}]\n"
+            f"[CTX-{index}]\n"
             f"Video: {meta['video_title']}\n"
-            f"Timestamp: {meta['timestamp_label']} ({int(meta['start_seconds'])}s)\n"
             f"Content: {chunk['text']}\n"
         )
     return "\n---\n".join(lines)
+
 
 
 def build_source_references(chunks: list[dict]) -> list[SourceReference]:

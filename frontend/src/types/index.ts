@@ -1,3 +1,18 @@
+export interface VideoChunk {
+  chunk_index: number;
+  start_seconds: number;
+  end_seconds: number;
+  timestamp_label: string;
+  text: string;
+}
+
+export interface ActiveVideo {
+  videoId: string;
+  videoTitle: string;
+  startSeconds: number;
+}
+
+
 export interface SourceReference {
   video_id: string;
   video_title: string;

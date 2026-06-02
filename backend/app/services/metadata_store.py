@@ -127,3 +127,35 @@ async def delete_source_data(db: AsyncSession, source_id: str) -> None:
     await db.execute(delete(Video).where(Video.source_id == source_id))
     await db.execute(delete(Source).where(Source.id == source_id))
     await db.commit()
+
+
+def _format_timestamp(seconds: float) -> str:
+    secs = int(seconds)
+    h = secs // 3600
+    m = (secs % 3600) // 60
+    s = secs % 60
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+async def get_video_chunks(db: AsyncSession, source_id: str, video_id: str) -> list[dict]:
+    """Return all indexed transcript chunks for a video, ordered by start_seconds."""
+    stored_video_id = _video_row_id(source_id, video_id)
+    result = await db.execute(
+        select(Chunk)
+        .where(Chunk.video_id == stored_video_id)
+        .order_by(Chunk.start_seconds)
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "chunk_index": row.chunk_index,
+            "start_seconds": row.start_seconds,
+            "end_seconds": row.end_seconds,
+            "timestamp_label": _format_timestamp(row.start_seconds),
+            "text": row.text,
+        }
+        for row in rows
+    ]
+

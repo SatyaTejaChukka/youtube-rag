@@ -6,9 +6,10 @@ import SourceList from './SourceList';
 interface Props {
   message: Message;
   index: number;
+  onSelectSource?: (videoId: string, videoTitle: string, startSeconds: number) => void;
 }
 
-export default function MessageBubble({ message, index }: Props) {
+export default function MessageBubble({ message, index, onSelectSource }: Props) {
   const isUser = message.role === 'user';
 
   return (
@@ -44,9 +45,10 @@ export default function MessageBubble({ message, index }: Props) {
           <p className="mb-2 pl-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)]">
             Referenced in
           </p>
-          <SourceList sources={message.sources} />
+          <SourceList sources={message.sources} onSelectSource={onSelectSource} />
         </div>
       )}
     </div>
   );
 }
+

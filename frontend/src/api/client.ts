@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 import { db } from '../db';
-import type { AskResponse, IngestRequest, IngestResponse, IngestProgress, SourceSummary, SourceReference } from '../types';
+import type { AskResponse, IngestRequest, IngestResponse, IngestProgress, SourceSummary, SourceReference, VideoChunk } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -117,6 +117,13 @@ export async function askQuestionStream(
 
 export async function getSources(sourceId: string): Promise<SourceSummary> {
   const { data } = await api.get<SourceSummary>(`/sources/${sourceId}`);
+  return data;
+}
+
+export async function getVideoChunks(sourceId: string, videoId: string): Promise<VideoChunk[]> {
+  const { data } = await api.get<VideoChunk[]>(
+    `/sources/${encodeURIComponent(sourceId)}/videos/${encodeURIComponent(videoId)}/chunks`
+  );
   return data;
 }
 

@@ -41,6 +41,14 @@ class SourceReference(BaseModel):
     thumbnail_url: Optional[str] = None
 
 
+class VideoChunk(BaseModel):
+    chunk_index: int
+    start_seconds: float
+    end_seconds: float
+    timestamp_label: str
+    text: str
+
+
 class AskResponse(BaseModel):
     answer: str
     sources: list[SourceReference]

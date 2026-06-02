@@ -4,15 +4,17 @@ import { BookOpen, Clapperboard, Settings as SettingsIcon, Cpu } from 'lucide-re
 import IndexedVideos from './IndexedVideos';
 import IngestPanel from './IngestPanel';
 import SettingsModal from './SettingsModal';
+import type { VideoSummary } from '../types';
 
 interface Props {
   sourceId: string | null;
   refreshKey: number;
   onIngested: (id: string, title: string) => void;
+  onSelectVideo?: (video: VideoSummary) => void;
   style?: CSSProperties;
 }
 
-export default function Sidebar({ sourceId, refreshKey, onIngested, style }: Props) {
+export default function Sidebar({ sourceId, refreshKey, onIngested, onSelectVideo, style }: Props) {
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -59,7 +61,7 @@ export default function Sidebar({ sourceId, refreshKey, onIngested, style }: Pro
                 Indexed Videos
               </span>
             </div>
-            <IndexedVideos sourceId={sourceId} refreshKey={refreshKey} />
+            <IndexedVideos sourceId={sourceId} refreshKey={refreshKey} onSelectVideo={onSelectVideo} />
           </>
         ) : (
           <div className="flex-1" />

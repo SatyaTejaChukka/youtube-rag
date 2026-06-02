@@ -1,14 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import ChatWindow from './components/ChatWindow';
 import EmptyState from './components/EmptyState';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import VideoCompanion from './components/VideoCompanion';
+import type { ActiveVideo, VideoSummary } from './types';
 
 export default function App() {
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [sourceTitle, setSourceTitle] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
+
+  // Clear companion when source changes
+  useEffect(() => {
+    setActiveVideo(null);
+  }, [sourceId]);
 
   function handleIngested(id: string, title: string) {
     setSourceId(id);
@@ -19,6 +27,15 @@ export default function App() {
   function handleClear() {
     setSourceId(null);
     setSourceTitle('');
+    setActiveVideo(null);
+  }
+
+  function handleSelectSource(videoId: string, videoTitle: string, startSeconds: number) {
+    setActiveVideo({ videoId, videoTitle, startSeconds });
+  }
+
+  function handleSelectVideo(video: VideoSummary) {
+    setActiveVideo({ videoId: video.video_id, videoTitle: video.title, startSeconds: 0 });
   }
 
   return (
@@ -46,17 +63,31 @@ export default function App() {
         sourceId={sourceId}
         refreshKey={refreshKey}
         onIngested={handleIngested}
+        onSelectVideo={handleSelectVideo}
         style={{ animation: 'sidebarEnter 0.5s cubic-bezier(0.22,1,0.36,1) both' }}
       />
 
       <main
-        className="relative z-10 flex flex-1 flex-col overflow-hidden"
+        className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden"
         style={{ animation: 'mainEnter 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both' }}
       >
         {sourceId ? (
           <>
             <TopBar sourceTitle={sourceTitle} onClear={handleClear} />
-            <ChatWindow sourceId={sourceId} />
+            <div className="flex min-w-0 flex-1 overflow-hidden">
+              <ChatWindow
+                sourceId={sourceId}
+                onSelectSource={handleSelectSource}
+              />
+              {activeVideo && (
+                <VideoCompanion
+                  sourceId={sourceId}
+                  activeVideo={activeVideo}
+                  onClose={() => setActiveVideo(null)}
+                  onChangeVideo={setActiveVideo}
+                />
+              )}
+            </div>
           </>
         ) : (
           <EmptyState />

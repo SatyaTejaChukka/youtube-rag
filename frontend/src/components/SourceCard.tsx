@@ -4,20 +4,22 @@ import type { SourceReference } from '../types';
 
 interface Props {
   source: SourceReference;
+  onSelect?: (videoId: string, videoTitle: string, startSeconds: number) => void;
 }
 
-export default function SourceCard({ source }: Props) {
+export default function SourceCard({ source, onSelect }: Props) {
   return (
-    <a
+    <div
       className="
         group flex cursor-pointer gap-3 rounded-[14px] border border-white/8 bg-[#191926] p-2.5
         no-underline shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_4px_12px_rgba(0,0,0,0.3)]
         transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]
         hover:-translate-y-px hover:border-white/14 hover:bg-white/[0.025] active:scale-[0.995]
       "
-      href={source.youtube_url}
-      rel="noopener noreferrer"
-      target="_blank"
+      onClick={() => onSelect?.(source.video_id, source.video_title, source.start_seconds)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect?.(source.video_id, source.video_title, source.start_seconds)}
     >
       <div className="relative h-[68px] w-[120px] shrink-0 overflow-hidden rounded-[8px] bg-[#1F1F30]">
         {source.thumbnail_url ? (
@@ -51,12 +53,19 @@ export default function SourceCard({ source }: Props) {
             <Clock size={10} />
             <span className="font-mono text-[10px] font-medium">Jump to {source.timestamp_label}</span>
           </div>
-          <ExternalLink
-            size={10}
-            className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--accent-400)]"
-          />
+          <a
+            href={source.youtube_url}
+            rel="noopener noreferrer"
+            target="_blank"
+            onClick={(e) => e.stopPropagation()}
+            title="Open on YouTube"
+            className="text-[var(--text-muted)] transition-colors hover:text-[var(--accent-400)]"
+          >
+            <ExternalLink size={10} />
+          </a>
         </div>
       </div>
-    </a>
+    </div>
   );
 }
+
