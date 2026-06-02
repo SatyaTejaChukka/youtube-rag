@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { apiErrorMessage, askQuestion } from '../api/client';
+import { apiErrorMessage, askQuestionStream } from '../api/client';
 import type { Message } from '../types';
 import InputBar from './InputBar';
 import MessageBubble from './MessageBubble';
@@ -25,15 +25,15 @@ function ChatEmptyHint() {
 
   return (
     <div className="fade-in-up space-y-6 pt-12">
-      <p className="text-center text-sm text-[var(--text-muted)]">Ask anything about the indexed videos</p>
+      <p className="text-center text-sm text-(--text-muted)">Ask anything about the indexed videos</p>
       <div className="mx-auto flex max-w-md flex-col gap-2">
         {hints.map((hint) => (
           <div
             key={hint}
             className="
-              rounded-[10px] border border-white/6 bg-white/[0.02] px-4 py-2.5
-              text-sm text-[var(--text-muted)] transition-all duration-150
-              hover:translate-x-0.5 hover:border-white/10 hover:bg-white/[0.04] hover:text-[var(--text-secondary)]
+              rounded-[10px] border border-white/6 bg-white/2 px-4 py-2.5
+              text-sm text-(--text-muted) transition-all duration-150
+              hover:translate-x-0.5 hover:border-white/10 hover:bg-white/4 hover:text-(--text-secondary)
             "
           >
             {hint}
@@ -75,32 +75,77 @@ export default function ChatWindow({ sourceId }: Props) {
     ]);
     setLoading(true);
 
+    const assistantMsgId = newId();
+
     try {
-      const result = await askQuestion(question, sourceId);
-      setMessages((current) => [
-        ...current,
-        {
-          id: newId(),
-          role: 'assistant',
-          content: result.answer,
-          sources: result.sources,
-          timestamp: new Date(),
+      await askQuestionStream(
+        question,
+        sourceId,
+        (token) => {
+          setLoading(false); // Safe to call directly in callback body
+          setMessages((current) => {
+            const exists = current.some((msg) => msg.id === assistantMsgId);
+            if (!exists) {
+              return [
+                ...current,
+                {
+                  id: assistantMsgId,
+                  role: 'assistant',
+                  content: token,
+                  timestamp: new Date(),
+                },
+              ];
+            } else {
+              return current.map((msg) =>
+                msg.id === assistantMsgId ? { ...msg, content: msg.content + token } : msg
+              );
+            }
+          });
         },
-      ]);
+        (sources) => {
+          setLoading(false);
+          setMessages((current) =>
+            current.map((msg) => (msg.id === assistantMsgId ? { ...msg, sources } : msg))
+          );
+        },
+        (error) => {
+          setLoading(false);
+          const errorMsg = apiErrorMessage(error, 'Something went wrong retrieving an answer. Please try again.');
+          setMessages((current) => {
+            const exists = current.some((msg) => msg.id === assistantMsgId);
+            if (!exists) {
+              return [
+                ...current,
+                {
+                  id: assistantMsgId,
+                  role: 'assistant',
+                  content: errorMsg,
+                  timestamp: new Date(),
+                },
+              ];
+            } else {
+              return current.map((msg) =>
+                msg.id === assistantMsgId ? { ...msg, content: msg.content + `\n\n[Error: ${errorMsg}]` } : msg
+              );
+            }
+          });
+        }
+      );
     } catch (error) {
+      setLoading(false);
+      const errorMsg = apiErrorMessage(error, 'Something went wrong retrieving an answer. Please try again.');
       setMessages((current) => [
         ...current,
         {
-          id: newId(),
+          id: assistantMsgId,
           role: 'assistant',
-          content: apiErrorMessage(error, 'Something went wrong retrieving an answer. Please try again.'),
+          content: errorMsg,
           timestamp: new Date(),
         },
       ]);
-    } finally {
-      setLoading(false);
     }
   }
+
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

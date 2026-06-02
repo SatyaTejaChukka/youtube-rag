@@ -1,5 +1,5 @@
 import { CSSProperties, useState } from 'react';
-import { BookOpen, Clapperboard, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { BookOpen, Clapperboard, Settings as SettingsIcon, Cpu } from 'lucide-react';
 
 import IndexedVideos from './IndexedVideos';
 import IngestPanel from './IngestPanel';
@@ -48,7 +48,7 @@ export default function Sidebar({ sourceId, refreshKey, onIngested, style }: Pro
             <SettingsIcon size={16} />
           </button>
         </header>
-
+ 
         <IngestPanel onIngested={onIngested} />
 
         {sourceId ? (
@@ -67,7 +67,7 @@ export default function Sidebar({ sourceId, refreshKey, onIngested, style }: Pro
 
         <footer className="flex h-10 shrink-0 items-center px-5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
           <span className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-            <Sparkles size={10} className="text-[var(--accent-400)]" />
+            <Cpu size={10} className="text-[var(--accent-400)]" />
             Free stack ready
           </span>
         </footer>

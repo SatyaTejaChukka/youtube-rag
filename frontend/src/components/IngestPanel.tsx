@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useState } from 'react';
 import { AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 
-import { apiErrorMessage, ingestSource } from '../api/client';
+import { apiErrorMessage, ingestSource, getIngestProgress } from '../api/client';
 import type { IngestRequest } from '../types';
 import { Button } from './ui/Button';
 
@@ -10,6 +10,12 @@ interface Props {
 }
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
+
+interface ProgressDetails {
+  currentVideo: string;
+  processed: number;
+  total: number;
+}
 
 function splitLinks(value: string): string[] {
   return value
@@ -22,6 +28,7 @@ export default function IngestPanel({ onIngested }: Props) {
   const [sourceUrl, setSourceUrl] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
+  const [progressDetails, setProgressDetails] = useState<ProgressDetails | null>(null);
 
   const disabled = status === 'loading' || !sourceUrl.trim();
 
@@ -38,19 +45,64 @@ export default function IngestPanel({ onIngested }: Props) {
 
     setStatus('loading');
     setMessage('');
+    setProgressDetails(null);
 
     const urls = splitLinks(trimmed);
     const request: IngestRequest = urls.length > 1 ? { urls } : { url: urls[0] };
 
     try {
       const result = await ingestSource(request);
-      const label = result.videos_indexed === 1 ? 'video indexed' : 'videos indexed';
-      setStatus('success');
-      setMessage(
-        `${result.videos_indexed} ${label}` +
-          (result.videos_skipped > 0 ? `, ${result.videos_skipped} skipped` : ''),
-      );
-      onIngested(result.source_id, result.source_title);
+
+      if (result.status === 'indexing') {
+        setProgressDetails({
+          currentVideo: 'Initializing background indexing...',
+          processed: 0,
+          total: 0,
+        });
+
+        const sourceId = result.source_id;
+        const intervalId = setInterval(async () => {
+          try {
+            const progress = await getIngestProgress(sourceId);
+            if (progress.status === 'indexing') {
+              setProgressDetails({
+                currentVideo: progress.current_video,
+                processed: progress.processed,
+                total: progress.total,
+              });
+            } else {
+              clearInterval(intervalId);
+              setProgressDetails(null);
+
+              if (progress.status === 'complete' || progress.status === 'partial') {
+                const label = progress.videos_indexed === 1 ? 'video indexed' : 'videos indexed';
+                setStatus('success');
+                setMessage(
+                  `${progress.videos_indexed} ${label}` +
+                    (progress.videos_skipped > 0 ? `, ${progress.videos_skipped} skipped` : ''),
+                );
+                onIngested(result.source_id, result.source_title);
+              } else {
+                setStatus('error');
+                setMessage(progress.current_video || 'Ingestion failed.');
+              }
+            }
+          } catch (err) {
+            clearInterval(intervalId);
+            setProgressDetails(null);
+            setStatus('error');
+            setMessage('Failed to get ingestion progress.');
+          }
+        }, 1500);
+      } else {
+        const label = result.videos_indexed === 1 ? 'video indexed' : 'videos indexed';
+        setStatus('success');
+        setMessage(
+          `${result.videos_indexed} ${label}` +
+            (result.videos_skipped > 0 ? `, ${result.videos_skipped} skipped` : ''),
+        );
+        onIngested(result.source_id, result.source_title);
+      }
     } catch (error) {
       setStatus('error');
       setMessage(apiErrorMessage(error, 'Ingestion failed. Check the links.'));
@@ -95,14 +147,35 @@ export default function IngestPanel({ onIngested }: Props) {
       </Button>
 
       {status === 'loading' && (
-        <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/5">
-          <div
-            className="h-full w-1/3 rounded-full"
-            style={{
-              animation: 'progressSlide 1.4s ease-in-out infinite',
-              background: 'linear-gradient(90deg, transparent, #6366F1, transparent)',
-            }}
-          />
+        <div className="space-y-2">
+          <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/5">
+            <div
+              className="h-full w-1/3 rounded-full"
+              style={{
+                animation: 'progressSlide 1.4s ease-in-out infinite',
+                background: 'linear-gradient(90deg, transparent, #6366F1, transparent)',
+              }}
+            />
+          </div>
+          {progressDetails && (
+            <div className="space-y-1 text-center font-mono text-[10px] text-[var(--text-muted)] animate-[pulse_2s_infinite]">
+              <div className="flex justify-between pl-0.5">
+                <span>
+                  {progressDetails.total > 0
+                    ? `Processed ${progressDetails.processed} / ${progressDetails.total}`
+                    : 'Resolving source...'}
+                </span>
+                {progressDetails.total > 0 && (
+                  <span>
+                    {Math.round((progressDetails.processed / progressDetails.total) * 100)}%
+                  </span>
+                )}
+              </div>
+              <div className="truncate text-left pl-0.5 font-sans italic text-[var(--text-secondary)]">
+                {progressDetails.currentVideo}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

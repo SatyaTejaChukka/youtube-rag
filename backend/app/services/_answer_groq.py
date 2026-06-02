@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from app.config import settings
 from app.services._answer_common import (
@@ -39,3 +39,28 @@ async def generate_answer(question: str, chunks: list[dict], api_key: str) -> di
     )
 
     return answer_payload(response.choices[0].message.content or "", chunks)
+
+
+async def generate_answer_stream(
+    question: str, chunks: list[dict], api_key: str
+) -> AsyncGenerator[str, None]:
+    if not chunks:
+        return
+
+    client = _get_client(api_key)
+    response = await client.chat.completions.create(
+        model=settings.groq_model,
+        max_tokens=1024,
+        temperature=0.3,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": build_user_message(question, chunks)},
+        ],
+        stream=True,
+    )
+
+    async for chunk in response:
+        content = chunk.choices[0].delta.content
+        if content:
+            yield content
+

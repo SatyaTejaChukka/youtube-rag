@@ -47,3 +47,47 @@ async def test_fetch_videos_metadata_concurrently(monkeypatch):
     assert res["vid1"]["title"] == "Title https://www.youtube.com/watch?v=vid1"
     assert res["vid2"]["title"] == "Title https://www.youtube.com/watch?v=vid2"
     assert len(calls) == 2
+
+
+@pytest.mark.anyio
+async def test_resolve_source_video_ids_channel(monkeypatch):
+    calls = []
+    async def fake_extract(url, opts):
+        calls.append(url)
+        return {
+            "channel_id": "UC123",
+            "uploader": "Uploader Name",
+            "entries": [{"id": "v1", "title": "Title 1", "duration": 30}, {"id": "v2", "title": "Title 2", "duration": 40}]
+        }
+    monkeypatch.setattr(youtube_service, "_extract", fake_extract)
+
+    from app.services.url_resolver import SourceInfo
+    info = SourceInfo(source_type="channel_handle", source_id="@Test", normalized_url="https://youtube.com/@Test")
+    ids, meta = await youtube_service.resolve_source_video_ids_and_meta(info)
+
+    assert ids == ["v1", "v2"]
+    assert meta["v1"]["title"] == "Title 1"
+    assert meta["v1"]["duration_secs"] == 30
+    assert meta["v2"]["title"] == "Title 2"
+    assert meta["v2"]["duration_secs"] == 40
+    assert calls == ["https://youtube.com/@Test/videos"]
+
+
+@pytest.mark.anyio
+async def test_fetch_source_metadata_channel(monkeypatch):
+    async def fake_extract(url, opts):
+        return {
+            "title": "Channel Title",
+            "channel_id": "UC123",
+            "uploader": "Uploader Name",
+            "webpage_url": "https://youtube.com/@Test",
+            "entries": [{"id": "subplaylist1"}]
+        }
+    monkeypatch.setattr(youtube_service, "_extract", fake_extract)
+
+    from app.services.url_resolver import SourceInfo
+    info = SourceInfo(source_type="channel_handle", source_id="@Test", normalized_url="https://youtube.com/@Test")
+    
+    meta = await youtube_service.fetch_source_metadata(info, video_ids=["v1", "v2", "v3"])
+    assert meta["title"] == "Channel Title"
+    assert meta["video_count"] == 3

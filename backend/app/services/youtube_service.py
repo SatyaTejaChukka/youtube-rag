@@ -85,17 +85,19 @@ async def fetch_source_metadata(source_info: SourceInfo, video_ids: list[str] | 
 
     try:
         info = await _extract(source_info.normalized_url, BASE_OPTS)
-        entries = info.get("entries") or []
         title = info.get("title") or info.get("uploader") or "Untitled YouTube Source"
         channel_id = info.get("channel_id") or ""
         channel_title = info.get("uploader") or info.get("channel") or ""
         
+        # Prioritize video_ids length for channels, fallback to entries or 0
+        video_count = len(video_ids) if video_ids is not None else (len(info.get("entries") or []) if info.get("entries") else 0)
+
         return {
             "title": title,
             "channel_id": channel_id,
             "channel_title": channel_title,
             "url": info.get("webpage_url") or source_info.normalized_url,
-            "video_count": len(entries) if entries else len(video_ids or []),
+            "video_count": video_count,
         }
     except Exception as exc:
         print(f"[WARN] Could not fetch source metadata for {source_info.normalized_url}: {exc}")
@@ -108,17 +110,56 @@ async def fetch_source_metadata(source_info: SourceInfo, video_ids: list[str] | 
         }
 
 
-async def resolve_source_video_ids(source_info: SourceInfo) -> list[str]:
+async def resolve_source_video_ids_and_meta(source_info: SourceInfo) -> tuple[list[str], dict[str, dict]]:
     if source_info.source_type == "video":
-        return [source_info.source_id]
+        opts = {**BASE_OPTS, "extract_flat": False}
+        url = f"https://www.youtube.com/watch?v={source_info.source_id}"
+        try:
+            info = await _extract(url, opts)
+            meta = _video_meta_from_info(info, source_info.source_id)
+        except Exception as exc:
+            print(f"[WARN] Error extracting single video details: {exc}")
+            meta = {
+                "title": source_info.source_id,
+                "description": "",
+                "channel_id": "",
+                "channel_title": "",
+                "published_at": "",
+                "thumbnail_url": f"https://i.ytimg.com/vi/{source_info.source_id}/hqdefault.jpg",
+                "duration_secs": 0,
+            }
+        return [source_info.source_id], {source_info.source_id: meta}
 
     try:
-        info = await _extract(source_info.normalized_url, BASE_OPTS)
+        url = source_info.normalized_url
+        if source_info.source_type in ("channel", "channel_handle"):
+            url = url.rstrip("/") + "/videos"
+
+        info = await _extract(url, BASE_OPTS)
         entries = info.get("entries") or []
 
-        video_ids = [entry["id"] for entry in entries if entry and entry.get("id")]
+        video_ids = []
+        video_metadata = {}
+        
+        channel_id = info.get("channel_id") or ""
+        channel_title = info.get("uploader") or info.get("channel") or ""
+
+        for entry in entries:
+            if entry and entry.get("id"):
+                vid = entry["id"]
+                video_ids.append(vid)
+                video_metadata[vid] = {
+                    "title": entry.get("title") or vid,
+                    "description": "",
+                    "channel_id": channel_id,
+                    "channel_title": channel_title,
+                    "published_at": entry.get("upload_date") or "",
+                    "thumbnail_url": _best_thumbnail(entry, vid),
+                    "duration_secs": int(entry.get("duration") or 0),
+                }
+
         if not video_ids:
             raise ValueError("No videos found at the provided URL. Is it public?")
-        return video_ids
+        return video_ids, video_metadata
     except Exception as exc:
         raise ValueError(f"Failed to extract videos from source: {exc}")

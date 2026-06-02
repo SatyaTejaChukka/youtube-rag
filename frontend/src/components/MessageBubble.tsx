@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { Brain } from 'lucide-react';
 
 import type { Message } from '../types';
 import SourceList from './SourceList';
@@ -24,7 +24,7 @@ export default function MessageBubble({ message, index }: Props) {
       <div className={`flex items-end gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && (
           <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-gradient-to-br from-indigo-500/20 to-cyan-500/20">
-            <Sparkles size={12} className="text-[var(--accent-400)]" />
+            <Brain size={12} className="text-[var(--accent-400)]" />
           </div>
         )}
 

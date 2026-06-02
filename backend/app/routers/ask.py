@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.models.api_models import AskRequest, AskResponse
@@ -45,3 +46,45 @@ async def ask_question(request: AskRequest, req: Request) -> AskResponse:
         answer=result["answer"],
         sources=result["sources"],
     )
+
+
+@router.post("/stream")
+async def ask_question_stream(request: AskRequest, req: Request) -> StreamingResponse:
+    question = request.question.strip()
+    source_id = request.source_id.strip() if request.source_id else None
+
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+    if not source_id:
+        raise HTTPException(status_code=400, detail="source_id cannot be empty")
+
+    try:
+        provider_creds = resolve_provider(req)
+        
+        question_embedding = await embed_text(f"{QUERY_PREFIX}{question}")
+        chunks = await retrieve_chunks(
+            query_embedding=question_embedding,
+            source_id=source_id,
+            top_k=settings.retrieval_top_k,
+        )
+        
+        from app.services.answer_generator import generate_answer_stream
+        
+        generator = generate_answer_stream(question, chunks, provider_creds)
+        
+        return StreamingResponse(
+            generator,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Streaming answer generation failed: {exc}") from exc
+

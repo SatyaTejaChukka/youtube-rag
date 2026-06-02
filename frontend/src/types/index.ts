@@ -38,7 +38,17 @@ export interface IngestResponse {
   videos_indexed: number;
   videos_skipped: number;
   skipped_video_ids: string[];
-  status: 'complete' | 'partial' | 'error';
+  status: string;
+}
+
+export interface IngestProgress {
+  status: string;
+  current_video: string;
+  processed: number;
+  total: number;
+  videos_indexed: number;
+  videos_skipped: number;
+  skipped_video_ids: string[];
 }
 
 export interface VideoSummary {
