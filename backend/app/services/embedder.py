@@ -17,7 +17,7 @@ def get_model() -> Any:
         from sentence_transformers import SentenceTransformer
 
         print(f"[INFO] Loading embedding model: {settings.embedding_model}")
-        _model = SentenceTransformer(settings.embedding_model)
+        _model = SentenceTransformer(settings.embedding_model, model_kwargs={"low_cpu_mem_usage": False})
         actual_dim = _model.get_sentence_embedding_dimension()
         if actual_dim != settings.embedding_dim:
             print(

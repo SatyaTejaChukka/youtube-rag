@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import VideoCompanion from './components/VideoCompanion';
 import type { ActiveVideo, VideoSummary } from './types';
+import { deleteSource } from './api/client';
 
 export default function App() {
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -24,7 +25,14 @@ export default function App() {
     setRefreshKey((value) => value + 1);
   }
 
-  function handleClear() {
+  async function handleClear() {
+    if (sourceId) {
+      try {
+        await deleteSource(sourceId);
+      } catch (err) {
+        console.warn('Failed to delete source on clear:', err);
+      }
+    }
     setSourceId(null);
     setSourceTitle('');
     setActiveVideo(null);

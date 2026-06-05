@@ -53,10 +53,10 @@ export default function SettingsModal({ onClose }: Props) {
                 setProvider(e.target.value);
                 setApiKey('');
               }}
-              className="w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none [&>option]:bg-[#0D0D14] [&>option]:text-white"
             >
-              <option value="groq">Groq</option>
-              <option value="ollama">Ollama (Local)</option>
+              <option value="groq" className="bg-[#0D0D14] text-white">Groq</option>
+              <option value="ollama" className="bg-[#0D0D14] text-white">Ollama (Local)</option>
             </select>
           </div>
 

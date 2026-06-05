@@ -3,8 +3,16 @@ import axios from 'axios';
 import { db } from '../db';
 import type { AskResponse, IngestRequest, IngestResponse, IngestProgress, SourceSummary, SourceReference, VideoChunk } from '../types';
 
+const getBaseURL = () => {
+  const url = import.meta.env.VITE_API_URL;
+  if (url) {
+    return url.endsWith('/') ? `${url}api` : `${url}/api`;
+  }
+  return '/api';
+};
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   headers: { 'Content-Type': 'application/json' },
   timeout: 300_000,
 });
@@ -59,7 +67,10 @@ export async function askQuestionStream(
       headers['X-API-Key'] = keyRecord.apiKey;
     }
 
-    const response = await fetch('/api/ask/stream', {
+    const streamBase = import.meta.env.VITE_API_URL || '';
+    const streamURL = streamBase.endsWith('/') ? `${streamBase}api/ask/stream` : `${streamBase}/api/ask/stream`;
+
+    const response = await fetch(streamURL, {
       method: 'POST',
       headers,
       body: JSON.stringify({ question, source_id: sourceId }),
