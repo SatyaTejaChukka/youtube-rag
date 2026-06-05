@@ -1,3 +1,12 @@
+---
+title: Youtube Rag Backend
+emoji: 📽️
+colorFrom: indigo
+colorTo: cyan
+sdk: docker
+app_port: 7860
+---
+
 # TubeRAG
 
 TubeRAG is an open-source, privacy-first Retrieval-Augmented Generation (RAG) application that allows you to ask natural language questions about any YouTube channel, playlist, or single video. It extracts transcripts, generates semantic embeddings, and provides highly accurate answers grounded entirely in the video content—complete with clickable source citations that jump straight to the exact timestamp in the video.

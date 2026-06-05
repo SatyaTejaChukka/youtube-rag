@@ -86,8 +86,12 @@ def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
 
+        # Merge manually created subtitles and automatic captions (subtitles take precedence)
+        subtitles = info.get("subtitles") or {}
         automatic_captions = info.get("automatic_captions") or {}
-        caption_url = _pick_auto_caption_track(automatic_captions)
+        combined_captions = {**automatic_captions, **subtitles}
+
+        caption_url = _pick_auto_caption_track(combined_captions)
         if not caption_url:
             return None
 
