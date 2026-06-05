@@ -40,6 +40,20 @@ async def diagnostics() -> dict:
         except Exception as e:
             cookies_preview = f"Error reading: {e}"
 
+    curl_cffi_status = "Not installed"
+    try:
+        import curl_cffi
+        curl_cffi_status = f"Installed"
+    except Exception as e:
+        curl_cffi_status = f"Import error: {type(e).__name__}: {e}"
+
+    yt_dlp_impersonate_status = "Not available"
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+        yt_dlp_impersonate_status = "ImpersonateTarget importable"
+    except Exception as e:
+        yt_dlp_impersonate_status = f"Import error: {type(e).__name__}: {e}"
+
     return {
         "cookies_file_found": cookies_paths,
         "cookies_file_size_bytes": cookies_size,
@@ -47,6 +61,8 @@ async def diagnostics() -> dict:
         "yt_cookies_env_set": yt_cookies_env_set,
         "yt_cookies_env_length": yt_cookies_env_length,
         "cwd": os.getcwd(),
+        "curl_cffi_status": curl_cffi_status,
+        "yt_dlp_impersonate_status": yt_dlp_impersonate_status,
         "logs": get_diag_logs(),
     }
 
