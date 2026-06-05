@@ -88,9 +88,22 @@ def _parse_json3_caption_payload(payload: str) -> list[dict]:
 def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
     try:
         import os
+        import tempfile
         import yt_dlp
 
-        opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        # Use a temporary directory for subtitle files
+        tmpdir = tempfile.mkdtemp()
+        
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "writeautomaticsub": True,
+            "writesubtitles": True,
+            "subtitleslangs": ["en"],
+            "subtitlesformat": "json3",
+            "outtmpl": os.path.join(tmpdir, "%(id)s"),
+        }
         for path in ("cookies.txt", "/app/cookies.txt", "backend/cookies.txt"):
             if os.path.exists(path):
                 opts["cookiefile"] = path
@@ -98,56 +111,63 @@ def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-
-        # Merge manually created subtitles and automatic captions (subtitles take precedence)
-        subtitles = info.get("subtitles") or {}
-        automatic_captions = info.get("automatic_captions") or {}
-        combined_captions = {**automatic_captions, **subtitles}
-
-        caption_url = _pick_auto_caption_track(combined_captions)
-        if not caption_url:
-            return None
-
-        response = httpx.get(caption_url, timeout=30)
-        response.raise_for_status()
+            
+            # Check if subtitles are available
+            subtitles = info.get("subtitles") or {}
+            automatic_captions = info.get("automatic_captions") or {}
+            combined_captions = {**automatic_captions, **subtitles}
+            
+            caption_url = _pick_auto_caption_track(combined_captions)
+            if not caption_url:
+                return None
+            
+            # Use yt-dlp's url opener which includes cookies
+            caption_content = ydl.urlopen(caption_url).read().decode("utf-8")
 
         if "json3" in caption_url:
-            return _parse_json3_caption_payload(response.text)
+            segments = _parse_json3_caption_payload(caption_content)
+        else:
+            # Fallback for other caption formats
+            text = caption_content
+            chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
+            segments: list[dict] = []
+            for chunk in chunks:
+                if "-->" not in chunk:
+                    continue
+                lines = chunk.splitlines()
+                if len(lines) < 2:
+                    continue
+                timestamp_line = lines[0]
+                text_lines = lines[1:]
+                match = re.match(
+                    r"(?P<start>\d+:\d+:\d+\.\d+|\d+:\d+\.\d+|\d+\.\d+)\s*-->\s*(?P<end>\d+:\d+:\d+\.\d+|\d+:\d+\.\d+|\d+\.\d+)",
+                    timestamp_line,
+                )
+                if not match:
+                    continue
 
-        # Fallback for other caption formats if YouTube returns a different timed-text style.
-        text = response.text
-        chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
-        segments: list[dict] = []
-        for chunk in chunks:
-            if "-->" not in chunk:
-                continue
-            lines = chunk.splitlines()
-            if len(lines) < 2:
-                continue
-            timestamp_line = lines[0]
-            text_lines = lines[1:]
-            match = re.match(
-                r"(?P<start>\d+:\d+:\d+\.\d+|\d+:\d+\.\d+|\d+\.\d+)\s*-->\s*(?P<end>\d+:\d+:\d+\.\d+|\d+:\d+\.\d+|\d+\.\d+)",
-                timestamp_line,
-            )
-            if not match:
-                continue
+                def _to_seconds(value: str) -> float:
+                    parts = value.split(":")
+                    if len(parts) == 3:
+                        hours, minutes, seconds = parts
+                        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+                    if len(parts) == 2:
+                        minutes, seconds = parts
+                        return int(minutes) * 60 + float(seconds)
+                    return float(value)
 
-            def _to_seconds(value: str) -> float:
-                parts = value.split(":")
-                if len(parts) == 3:
-                    hours, minutes, seconds = parts
-                    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-                if len(parts) == 2:
-                    minutes, seconds = parts
-                    return int(minutes) * 60 + float(seconds)
-                return float(value)
+                start = _to_seconds(match.group("start"))
+                end = _to_seconds(match.group("end"))
+                text_value = " ".join(line.strip() for line in text_lines if line.strip())
+                if text_value:
+                    segments.append({"text": text_value, "start": start, "duration": max(0.0, end - start)})
 
-            start = _to_seconds(match.group("start"))
-            end = _to_seconds(match.group("end"))
-            text_value = " ".join(line.strip() for line in text_lines if line.strip())
-            if text_value:
-                segments.append({"text": text_value, "start": start, "duration": max(0.0, end - start)})
+        # Clean up temp directory
+        try:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass
 
         return segments or None
     except Exception as exc:
