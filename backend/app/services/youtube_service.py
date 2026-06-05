@@ -60,8 +60,12 @@ async def fetch_video_metadata(video_id: str) -> dict:
     url = f"https://www.youtube.com/watch?v={video_id}"
     try:
         info = await _extract(url, opts)
+        from app.services.diagnostics import log_diag
+        log_diag(f"fetch_video_metadata successfully extracted metadata for {video_id}")
         return _video_meta_from_info(info, video_id)
     except Exception as exc:
+        from app.services.diagnostics import log_diag
+        log_diag(f"fetch_video_metadata exception for {video_id}: {exc}")
         print(f"[WARN] Could not fetch full metadata for {video_id}: {exc}")
         return {
             "title": video_id,
@@ -125,7 +129,11 @@ async def resolve_source_video_ids_and_meta(source_info: SourceInfo) -> tuple[li
         try:
             info = await _extract(url, opts)
             meta = _video_meta_from_info(info, source_info.source_id)
+            from app.services.diagnostics import log_diag
+            log_diag(f"resolve_source_video_ids_and_meta successfully extracted metadata for {source_info.source_id}")
         except Exception as exc:
+            from app.services.diagnostics import log_diag
+            log_diag(f"resolve_source_video_ids_and_meta exception for {source_info.source_id}: {exc}")
             print(f"[WARN] Error extracting single video details: {exc}")
             meta = {
                 "title": source_info.source_id,

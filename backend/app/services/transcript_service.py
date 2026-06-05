@@ -36,10 +36,20 @@ def _fetch_transcript_sync(video_id: str) -> list[dict] | None:
             transcript = transcript_list.find_manually_created_transcript(["en"])
         except Exception:
             transcript = transcript_list.find_generated_transcript(["en"])
-        return [_normalize_segment(segment) for segment in transcript.fetch()]
-    except (NoTranscriptFound, TranscriptsDisabled):
+        
+        from app.services.diagnostics import log_diag
+        log_diag(f"YouTubeTranscriptApi successfully listed transcripts for {video_id}")
+        
+        segments = [_normalize_segment(segment) for segment in transcript.fetch()]
+        log_diag(f"YouTubeTranscriptApi successfully fetched {len(segments)} segments for {video_id}")
+        return segments
+    except (NoTranscriptFound, TranscriptsDisabled) as exc:
+        from app.services.diagnostics import log_diag
+        log_diag(f"YouTubeTranscriptApi NoTranscriptFound/TranscriptsDisabled for {video_id}: {exc}")
         return None
     except Exception as exc:
+        from app.services.diagnostics import log_diag
+        log_diag(f"YouTubeTranscriptApi exception for {video_id}: {exc}")
         print(f"[WARN] Transcript fetch failed for {video_id}: {exc}")
         return None
 
@@ -169,8 +179,16 @@ def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
         except Exception:
             pass
 
+        if segments:
+            from app.services.diagnostics import log_diag
+            log_diag(f"_fetch_auto_generated_transcript_sync successfully fetched {len(segments)} segments for {video_id}")
+        else:
+            from app.services.diagnostics import log_diag
+            log_diag(f"_fetch_auto_generated_transcript_sync returned no segments for {video_id}")
         return segments or None
     except Exception as exc:
+        from app.services.diagnostics import log_diag
+        log_diag(f"_fetch_auto_generated_transcript_sync exception for {video_id}: {exc}")
         print(f"[WARN] Auto-caption fallback failed for {video_id}: {exc}")
         return None
 
