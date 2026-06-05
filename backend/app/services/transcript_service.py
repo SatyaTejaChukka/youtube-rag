@@ -24,7 +24,14 @@ def _normalize_segment(segment: Any) -> dict:
 
 def _fetch_transcript_sync(video_id: str) -> list[dict] | None:
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        import os
+        cookies_file = None
+        for path in ("cookies.txt", "/app/cookies.txt", "backend/cookies.txt"):
+            if os.path.exists(path):
+                cookies_file = path
+                break
+
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, cookies=cookies_file)
         try:
             transcript = transcript_list.find_manually_created_transcript(["en"])
         except Exception:
@@ -80,9 +87,15 @@ def _parse_json3_caption_payload(payload: str) -> list[dict]:
 
 def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
     try:
+        import os
         import yt_dlp
 
         opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        for path in ("cookies.txt", "/app/cookies.txt", "backend/cookies.txt"):
+            if os.path.exists(path):
+                opts["cookiefile"] = path
+                break
+
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
 

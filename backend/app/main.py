@@ -23,6 +23,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_db()
+    
+    # Write YouTube cookies if provided in environment variables
+    import os
+    cookies_content = os.environ.get("YT_COOKIES")
+    if cookies_content:
+        try:
+            with open("cookies.txt", "w", encoding="utf-8") as f:
+                f.write(cookies_content)
+            print("[INFO] Successfully wrote YT_COOKIES to cookies.txt")
+        except Exception as e:
+            print(f"[WARN] Failed to write YT_COOKIES: {e}")
 
 
 @app.get("/")

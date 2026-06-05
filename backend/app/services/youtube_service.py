@@ -12,7 +12,15 @@ BASE_OPTS = {
 
 
 def _run_ydl(url: str, opts: dict) -> dict:
+    import os
     import yt_dlp
+    
+    # Inject cookies if file exists
+    for path in ("cookies.txt", "/app/cookies.txt", "backend/cookies.txt"):
+        if os.path.exists(path):
+            opts["cookiefile"] = path
+            break
+            
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
