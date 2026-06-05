@@ -18,6 +18,7 @@ RUN pip install --default-timeout=1500 --no-cache-dir -r requirements.txt
 COPY backend/ .
 
 # Expose port (Hugging Face routes to app_port in frontmatter, default is 7860)
+ENV PORT=7860
 EXPOSE 7860
 
 # Run the application using our env port configuration
