@@ -119,6 +119,13 @@ def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
                 opts["cookiefile"] = path
                 break
 
+        # Inject Chrome impersonation to bypass SSL/TLS blocking on datacenter IPs
+        try:
+            from yt_dlp.networking.impersonate import ImpersonateTarget
+            opts["impersonate"] = ImpersonateTarget.from_str("chrome-110")
+        except Exception:
+            pass
+
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
             

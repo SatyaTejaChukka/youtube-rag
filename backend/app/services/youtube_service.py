@@ -21,6 +21,13 @@ def _run_ydl(url: str, opts: dict) -> dict:
             opts["cookiefile"] = path
             break
             
+    # Inject Chrome impersonation to bypass SSL/TLS blocking on datacenter IPs
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+        opts["impersonate"] = ImpersonateTarget.from_str("chrome-110")
+    except Exception:
+        pass
+
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
