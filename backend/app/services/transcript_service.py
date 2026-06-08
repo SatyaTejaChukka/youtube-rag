@@ -113,6 +113,7 @@ def _fetch_auto_generated_transcript_sync(video_id: str) -> list[dict] | None:
             "subtitleslangs": ["en"],
             "subtitlesformat": "json3",
             "outtmpl": os.path.join(tmpdir, "%(id)s"),
+            "source_address": "0.0.0.0",
         }
         for path in ("cookies.txt", "/app/cookies.txt", "backend/cookies.txt"):
             if os.path.exists(path):
