@@ -1,4 +1,5 @@
 import re
+import hashlib
 import asyncio
 from typing import Any
 
@@ -52,17 +53,80 @@ async def _resolve_ingest_source(
     if not urls:
         raise IngestRequestError("Please provide a valid YouTube URL.")
     
-    url = urls[0]
-    
+    if len(urls) == 1:
+        url = urls[0]
+        try:
+            source_info = resolve_url(url)
+        except ValueError as exc:
+            raise IngestRequestError(str(exc)) from exc
+
+        video_ids, video_metadata = await resolve_source_video_ids_and_meta(source_info)
+        source_meta = await fetch_source_metadata(source_info, video_ids)
+        return source_info, source_meta, video_ids, video_metadata
+
+    # Multiple URLs: Group into a single virtual "batch" source
+    async def resolve_one(url: str):
+        try:
+            s_info = resolve_url(url)
+            v_ids, v_meta = await resolve_source_video_ids_and_meta(s_info)
+            s_meta = await fetch_source_metadata(s_info, v_ids)
+            return s_info, s_meta, v_ids, v_meta
+        except Exception as exc:
+            raise IngestRequestError(f"Failed to resolve URL '{url}': {exc}")
+
+    tasks = [resolve_one(u) for u in urls]
     try:
-        source_info = resolve_url(url)
-    except ValueError as exc:
+        resolved = await asyncio.gather(*tasks)
+    except Exception as exc:
         raise IngestRequestError(str(exc)) from exc
 
-    video_ids, video_metadata = await resolve_source_video_ids_and_meta(source_info)
-    source_meta = await fetch_source_metadata(source_info, video_ids)
+    # Merge video_ids and video_metadata, keeping order and avoiding duplicates
+    merged_video_ids = []
+    seen_video_ids = set()
+    merged_video_metadata = {}
     
-    return source_info, source_meta, video_ids, video_metadata
+    for _, _, v_ids, v_meta in resolved:
+        for vid in v_ids:
+            if vid not in seen_video_ids:
+                seen_video_ids.add(vid)
+                merged_video_ids.append(vid)
+                merged_video_metadata[vid] = v_meta.get(vid, {})
+
+    # Generate a stable batch source_id based on the sorted video IDs
+    hasher = hashlib.md5()
+    for vid in sorted(merged_video_ids):
+        hasher.update(vid.encode("utf-8"))
+    batch_hash = hasher.hexdigest()[:8]
+    batch_source_id = f"batch_{batch_hash}"
+
+    # Build descriptive title
+    titles = [meta.get("title", "") for _, meta, _, _ in resolved]
+    titles = [t for t in titles if t]
+    if len(titles) > 2:
+        batch_title = f"Batch: {titles[0]}, {titles[1]} and {len(titles)-2} more"
+    elif len(titles) == 2:
+        batch_title = f"Batch: {titles[0]} & {titles[1]}"
+    elif titles:
+        batch_title = f"Batch: {titles[0]}"
+    else:
+        batch_title = f"Batch Ingest ({len(urls)} sources)"
+
+    # Create virtual SourceInfo and source metadata
+    source_info = SourceInfo(
+        source_type="batch",
+        source_id=batch_source_id,
+        normalized_url=";".join(urls),
+    )
+    
+    source_meta = {
+        "title": batch_title,
+        "channel_id": "",
+        "channel_title": "Multiple Channels" if len(set(m.get("channel_title", "") for _, m, _, _ in resolved)) > 1 else (resolved[0][1].get("channel_title") or ""),
+        "url": ";".join(urls),
+        "video_count": len(merged_video_ids),
+    }
+
+    return source_info, source_meta, merged_video_ids, merged_video_metadata
 
 
 async def _bg_ingest_source(
@@ -119,56 +183,72 @@ async def _bg_ingest_source(
                 "total": len(videos_to_process),
             })
 
-            for idx, video_id in enumerate(videos_to_process):
-                # Add 0.1 second delay to prevent rate limits
-                if idx > 0:
-                    await asyncio.sleep(0.1)
+            # Concurrency limit (3 parallel videos at a time)
+            sem = asyncio.Semaphore(3)
+            processed_count = 0
+            
+            async def process_video(idx: int, video_id: str) -> None:
+                nonlocal indexed, processed_count
+                async with sem:
+                    # Stagger startups slightly to avoid simultaneous spikes
+                    if idx > 0:
+                        await asyncio.sleep(idx * 0.2)
+                        
+                    video_meta = video_metadata.get(video_id, {})
+                    video_title = video_meta.get("title", video_id)
+                    
+                    ingest_progress[source_id].update({
+                        "current_video": f"Indexing: {video_title}",
+                    })
+                    
+                    try:
+                        segments = await fetch_transcript(video_id)
+                        if not segments:
+                            skipped.append(video_id)
+                            async with AsyncSessionLocal() as sub_db:
+                                await save_video(
+                                    sub_db,
+                                    video_id,
+                                    source_id,
+                                    video_meta,
+                                    transcript_available=False,
+                                )
+                            return
 
-                video_meta = video_metadata.get(video_id, {})
-                video_title = video_meta.get("title", video_id)
-
-                # Update progress for active video
-                ingest_progress[source_id].update({
-                    "current_video": f"Indexing: {video_title}",
-                    "processed": idx + 1,
-                })
-
-                try:
-                    segments = await fetch_transcript(video_id)
-                    if not segments:
+                        chunks = chunk_transcript(segments, video_id, source_id, video_meta)
+                        embeddings = await embed_texts([chunk["text"] for chunk in chunks])
+                        await upsert_chunks(chunks, embeddings)
+                        
+                        async with AsyncSessionLocal() as sub_db:
+                            await save_video(
+                                sub_db,
+                                video_id,
+                                source_id,
+                                video_meta,
+                                transcript_available=True,
+                                chunk_count=len(chunks),
+                            )
+                            await save_chunks(sub_db, chunks)
+                        indexed += 1
+                    except Exception as exc:
+                        print(f"[WARN] Failed to process video {video_id}: {exc}")
                         skipped.append(video_id)
-                        await save_video(
-                            db,
-                            video_id,
-                            source_id,
-                            video_meta,
-                            transcript_available=False,
-                        )
-                        continue
+                        async with AsyncSessionLocal() as sub_db:
+                            await save_video(
+                                sub_db,
+                                video_id,
+                                source_id,
+                                video_meta,
+                                transcript_available=False,
+                            )
+                    finally:
+                        processed_count += 1
+                        ingest_progress[source_id].update({
+                            "processed": processed_count,
+                        })
 
-                    chunks = chunk_transcript(segments, video_id, source_id, video_meta)
-                    embeddings = await embed_texts([chunk["text"] for chunk in chunks])
-                    await upsert_chunks(chunks, embeddings)
-                    await save_video(
-                        db,
-                        video_id,
-                        source_id,
-                        video_meta,
-                        transcript_available=True,
-                        chunk_count=len(chunks),
-                    )
-                    await save_chunks(db, chunks)
-                    indexed += 1
-                except Exception as exc:
-                    print(f"[WARN] Failed to process video {video_id}: {exc}")
-                    skipped.append(video_id)
-                    await save_video(
-                        db,
-                        video_id,
-                        source_id,
-                        video_meta,
-                        transcript_available=False,
-                    )
+            tasks = [process_video(idx, vid) for idx, vid in enumerate(videos_to_process)]
+            await asyncio.gather(*tasks)
 
             status = "complete" if not skipped else "partial"
             await mark_source_status(db, source_id, status)

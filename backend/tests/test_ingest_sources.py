@@ -55,3 +55,36 @@ def test_parse_link_entries_splits_newlines_and_commas():
         "https://b",
         "https://c",
     ]
+
+
+@pytest.mark.anyio
+async def test_resolve_ingest_source_multiple_urls(monkeypatch):
+    from app.routers.ingest import _resolve_ingest_source
+    from app.models.api_models import IngestRequest
+    
+    async def mock_resolve(source_info):
+        if source_info.source_type == "video":
+            return [source_info.source_id], {source_info.source_id: {"title": f"Video {source_info.source_id}"}}
+        return [], {}
+        
+    async def mock_fetch(source_info, video_ids):
+        return {"title": f"Title of {source_info.source_id}"}
+        
+    monkeypatch.setattr("app.routers.ingest.resolve_source_video_ids_and_meta", mock_resolve)
+    monkeypatch.setattr("app.routers.ingest.fetch_source_metadata", mock_fetch)
+    
+    req = IngestRequest(
+        url="https://www.youtube.com/watch?v=vid11111111",
+        urls=["https://www.youtube.com/watch?v=vid22222222"]
+    )
+    
+    source_info, source_meta, video_ids, video_metadata = await _resolve_ingest_source(req)
+    
+    assert source_info.source_type == "batch"
+    assert source_info.source_id.startswith("batch_")
+    assert "vid11111111" in video_ids
+    assert "vid22222222" in video_ids
+    assert video_metadata["vid11111111"]["title"] == "Video vid11111111"
+    assert video_metadata["vid22222222"]["title"] == "Video vid22222222"
+    assert "Title of vid11111111" in source_meta["title"]
+    assert "Title of vid22222222" in source_meta["title"]

@@ -14,7 +14,7 @@ def _sqlite_url() -> str:
     return f"sqlite+aiosqlite:///{settings.sqlite_db_path}"
 
 
-engine = create_async_engine(_sqlite_url(), echo=False)
+engine = create_async_engine(_sqlite_url(), connect_args={"timeout": 30.0}, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
