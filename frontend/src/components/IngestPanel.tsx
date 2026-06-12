@@ -1,8 +1,17 @@
 import { FormEvent, KeyboardEvent, useState } from 'react';
-import { AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Download,
+  Plus,
+  Sparkles,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
 
 import { apiErrorMessage, ingestSource, getIngestProgress } from '../api/client';
-import type { IngestRequest } from '../types';
+import type { IngestRequest, VideoProgress } from '../types';
 import { Button } from './ui/Button';
 
 interface Props {
@@ -15,6 +24,7 @@ interface ProgressDetails {
   currentVideo: string;
   processed: number;
   total: number;
+  videos: Record<string, VideoProgress>;
 }
 
 function splitLinks(value: string): string[] {
@@ -22,6 +32,75 @@ function splitLinks(value: string): string[] {
     .split(/[\n,]+/)
     .map((link) => link.trim())
     .filter(Boolean);
+}
+
+const STATUS_CONFIG: Record<
+  VideoProgress['status'],
+  { icon: typeof Clock; label: string; color: string; animate: boolean }
+> = {
+  queued: { icon: Clock, label: 'Queued', color: '#6b7280', animate: false },
+  downloading: { icon: Download, label: 'Fetching', color: '#3b82f6', animate: true },
+  embedding: { icon: Sparkles, label: 'Embedding', color: '#6366f1', animate: true },
+  completed: { icon: CheckCircle2, label: 'Done', color: '#10b981', animate: false },
+  skipped: { icon: AlertTriangle, label: 'Skipped', color: '#f59e0b', animate: false },
+  failed: { icon: XCircle, label: 'Failed', color: '#ef4444', animate: false },
+};
+
+function VideoProgressRow({ video, index }: { video: VideoProgress; index: number }) {
+  const config = STATUS_CONFIG[video.status];
+  const Icon = config.icon;
+
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 transition-colors"
+      style={{
+        animation: `fadeSlideIn 0.3s ease-out ${index * 0.05}s both`,
+        background: video.status === 'completed' ? 'rgba(16,185,129,0.04)' : 'transparent',
+      }}
+    >
+      {/* Thumbnail */}
+      <img
+        alt=""
+        className="h-[18px] w-[32px] shrink-0 rounded-[3px] object-cover"
+        src={video.thumbnail_url}
+        style={{
+          opacity: video.status === 'queued' ? 0.4 : 1,
+          filter: video.status === 'queued' ? 'grayscale(0.5)' : 'none',
+          transition: 'opacity 0.3s, filter 0.3s',
+        }}
+      />
+
+      {/* Title */}
+      <span
+        className="min-w-0 flex-1 truncate text-[11px]"
+        style={{
+          color:
+            video.status === 'completed'
+              ? 'var(--text-primary)'
+              : video.status === 'queued'
+                ? 'var(--text-muted)'
+                : 'var(--text-secondary)',
+          transition: 'color 0.3s',
+        }}
+      >
+        {video.title}
+      </span>
+
+      {/* Status badge */}
+      <div
+        className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5"
+        style={{
+          color: config.color,
+          background: `${config.color}15`,
+          animation: config.animate ? 'statusPulse 1.8s ease-in-out infinite' : undefined,
+          transition: 'all 0.3s',
+        }}
+      >
+        <Icon size={9} />
+        <span className="text-[9px] font-semibold uppercase tracking-wider">{config.label}</span>
+      </div>
+    </div>
+  );
 }
 
 export default function IngestPanel({ onIngested }: Props) {
@@ -58,6 +137,7 @@ export default function IngestPanel({ onIngested }: Props) {
           currentVideo: 'Initializing background indexing...',
           processed: 0,
           total: 0,
+          videos: {},
         });
 
         const sourceId = result.source_id;
@@ -69,6 +149,7 @@ export default function IngestPanel({ onIngested }: Props) {
                 currentVideo: progress.current_video,
                 processed: progress.processed,
                 total: progress.total,
+                videos: progress.videos || {},
               });
             } else {
               clearInterval(intervalId);
@@ -115,6 +196,9 @@ export default function IngestPanel({ onIngested }: Props) {
     }
   }
 
+  const videoEntries = progressDetails ? Object.values(progressDetails.videos) : [];
+  const hasVideoList = videoEntries.length > 0;
+
   return (
     <form className="space-y-3 border-b border-white/[0.04] p-4" onSubmit={handleSubmit}>
       <div className="space-y-2">
@@ -148,32 +232,59 @@ export default function IngestPanel({ onIngested }: Props) {
 
       {status === 'loading' && (
         <div className="space-y-2">
+          {/* Overall progress bar */}
           <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/5">
-            <div
-              className="h-full w-1/3 rounded-full"
-              style={{
-                animation: 'progressSlide 1.4s ease-in-out infinite',
-                background: 'linear-gradient(90deg, transparent, #6366F1, transparent)',
-              }}
-            />
+            {progressDetails && progressDetails.total > 0 ? (
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{
+                  width: `${Math.round((progressDetails.processed / progressDetails.total) * 100)}%`,
+                  background: 'linear-gradient(90deg, #6366F1, #06B6D4)',
+                }}
+              />
+            ) : (
+              <div
+                className="h-full w-1/3 rounded-full"
+                style={{
+                  animation: 'progressSlide 1.4s ease-in-out infinite',
+                  background: 'linear-gradient(90deg, transparent, #6366F1, transparent)',
+                }}
+              />
+            )}
           </div>
+
+          {/* Summary line */}
           {progressDetails && (
-            <div className="space-y-1 text-center font-mono text-[10px] text-[var(--text-muted)] animate-[pulse_2s_infinite]">
-              <div className="flex justify-between pl-0.5">
+            <div className="flex justify-between px-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+              <span>
+                {progressDetails.total > 0
+                  ? `Processed ${progressDetails.processed} / ${progressDetails.total}`
+                  : 'Resolving source...'}
+              </span>
+              {progressDetails.total > 0 && (
                 <span>
-                  {progressDetails.total > 0
-                    ? `Processed ${progressDetails.processed} / ${progressDetails.total}`
-                    : 'Resolving source...'}
+                  {Math.round((progressDetails.processed / progressDetails.total) * 100)}%
                 </span>
-                {progressDetails.total > 0 && (
-                  <span>
-                    {Math.round((progressDetails.processed / progressDetails.total) * 100)}%
-                  </span>
-                )}
-              </div>
-              <div className="truncate text-left pl-0.5 font-sans italic text-[var(--text-secondary)]">
-                {progressDetails.currentVideo}
-              </div>
+              )}
+            </div>
+          )}
+
+          {/* Per-video progress list */}
+          {hasVideoList && (
+            <div
+              className="space-y-0.5 overflow-y-auto rounded-[10px] border border-white/[0.04] bg-[#12121e] p-1.5"
+              style={{ maxHeight: '160px' }}
+            >
+              {videoEntries.map((video, idx) => (
+                <VideoProgressRow key={video.video_id} index={idx} video={video} />
+              ))}
+            </div>
+          )}
+
+          {/* Fallback: show current_video text if no per-video list available */}
+          {!hasVideoList && progressDetails && (
+            <div className="truncate px-0.5 font-sans text-[11px] italic text-[var(--text-secondary)] animate-[pulse_2s_infinite]">
+              {progressDetails.currentVideo}
             </div>
           )}
         </div>

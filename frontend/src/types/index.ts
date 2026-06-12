@@ -56,6 +56,13 @@ export interface IngestResponse {
   status: string;
 }
 
+export interface VideoProgress {
+  video_id: string;
+  title: string;
+  thumbnail_url: string;
+  status: 'queued' | 'downloading' | 'embedding' | 'completed' | 'skipped' | 'failed';
+}
+
 export interface IngestProgress {
   status: string;
   current_video: string;
@@ -64,6 +71,7 @@ export interface IngestProgress {
   videos_indexed: number;
   videos_skipped: number;
   skipped_video_ids: string[];
+  videos?: Record<string, VideoProgress>;
 }
 
 export interface VideoSummary {

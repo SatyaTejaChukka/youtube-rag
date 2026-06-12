@@ -176,11 +176,23 @@ async def _bg_ingest_source(
                 }
                 return
 
+            # Build per-video progress entries
+            videos_progress = {}
+            for vid in videos_to_process:
+                v_meta = video_metadata.get(vid, {})
+                videos_progress[vid] = {
+                    "video_id": vid,
+                    "title": v_meta.get("title", vid),
+                    "thumbnail_url": v_meta.get("thumbnail_url", f"https://i.ytimg.com/vi/{vid}/default.jpg"),
+                    "status": "queued",
+                }
+
             # Update initial progress state
             ingest_progress[source_id].update({
                 "current_video": "Preparing chunking and embedding models...",
                 "processed": 0,
                 "total": len(videos_to_process),
+                "videos": videos_progress,
             })
 
             # Concurrency limit (3 parallel videos at a time)
@@ -197,6 +209,10 @@ async def _bg_ingest_source(
                     video_meta = video_metadata.get(video_id, {})
                     video_title = video_meta.get("title", video_id)
                     
+                    # Mark video as downloading
+                    vp = ingest_progress[source_id].get("videos", {})
+                    if video_id in vp:
+                        vp[video_id]["status"] = "downloading"
                     ingest_progress[source_id].update({
                         "current_video": f"Indexing: {video_title}",
                     })
@@ -205,6 +221,8 @@ async def _bg_ingest_source(
                         segments = await fetch_transcript(video_id)
                         if not segments:
                             skipped.append(video_id)
+                            if video_id in vp:
+                                vp[video_id]["status"] = "skipped"
                             async with AsyncSessionLocal() as sub_db:
                                 await save_video(
                                     sub_db,
@@ -216,6 +234,11 @@ async def _bg_ingest_source(
                             return
 
                         chunks = chunk_transcript(segments, video_id, source_id, video_meta)
+
+                        # Mark video as embedding
+                        if video_id in vp:
+                            vp[video_id]["status"] = "embedding"
+
                         embeddings = await embed_texts([chunk["text"] for chunk in chunks])
                         await upsert_chunks(chunks, embeddings)
                         
@@ -230,9 +253,13 @@ async def _bg_ingest_source(
                             )
                             await save_chunks(sub_db, chunks)
                         indexed += 1
+                        if video_id in vp:
+                            vp[video_id]["status"] = "completed"
                     except Exception as exc:
                         print(f"[WARN] Failed to process video {video_id}: {exc}")
                         skipped.append(video_id)
+                        if video_id in vp:
+                            vp[video_id]["status"] = "failed"
                         async with AsyncSessionLocal() as sub_db:
                             await save_video(
                                 sub_db,
