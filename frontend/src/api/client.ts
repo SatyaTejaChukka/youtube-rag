@@ -142,6 +142,11 @@ export async function deleteSource(sourceId: string): Promise<void> {
   await api.delete(`/sources/${sourceId}`);
 }
 
+export async function getHealth(): Promise<{ status: string; has_groq_api_key: boolean }> {
+  const { data } = await api.get<{ status: string; has_groq_api_key: boolean }>('/health');
+  return data;
+}
+
 export function apiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;

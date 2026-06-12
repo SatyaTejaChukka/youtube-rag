@@ -79,6 +79,19 @@ export default function SettingsModal({ onClose }: Props) {
               {saved ? 'Saved!' : 'Save Settings'}
             </Button>
           </div>
+
+          {provider === 'groq' && (
+            <div className="text-center pt-2 border-t border-white/5 mt-3">
+              <a
+                href="https://console.groq.com/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                Create Groq API Key at console.groq.com
+              </a>
+            </div>
+          )}
         </form>
       </div>
     </div>

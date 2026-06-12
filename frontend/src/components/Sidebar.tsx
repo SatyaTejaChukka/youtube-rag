@@ -1,10 +1,12 @@
-import { CSSProperties, useState } from 'react';
-import { BookOpen, Clapperboard, Settings as SettingsIcon, Cpu } from 'lucide-react';
+import { CSSProperties, useState, useEffect } from 'react';
+import { BookOpen, Clapperboard, Settings as SettingsIcon, Cpu, AlertTriangle } from 'lucide-react';
 
 import IndexedVideos from './IndexedVideos';
 import IngestPanel from './IngestPanel';
 import SettingsModal from './SettingsModal';
 import type { VideoSummary } from '../types';
+import { db } from '../db';
+import { getHealth } from '../api/client';
 
 interface Props {
   sourceId: string | null;
@@ -16,6 +18,37 @@ interface Props {
 
 export default function Sidebar({ sourceId, refreshKey, onIngested, onSelectVideo, style }: Props) {
   const [showSettings, setShowSettings] = useState(false);
+  const [hasGroqKey, setHasGroqKey] = useState(true);
+
+  const checkKeys = async () => {
+    try {
+      const keyRecord = await db.keys.get('groq');
+      if (keyRecord?.apiKey) {
+        setHasGroqKey(true);
+        return;
+      }
+      const health = await getHealth();
+      if (health.has_groq_api_key) {
+        setHasGroqKey(true);
+        return;
+      }
+      setHasGroqKey(false);
+    } catch (error) {
+      console.warn('Failed to check Groq API key configuration:', error);
+      try {
+        const keyRecord = await db.keys.get('groq');
+        setHasGroqKey(!!keyRecord?.apiKey);
+      } catch {
+        setHasGroqKey(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!showSettings) {
+      void checkKeys();
+    }
+  }, [showSettings]);
 
   return (
     <>
@@ -50,6 +83,23 @@ export default function Sidebar({ sourceId, refreshKey, onIngested, onSelectVide
             <SettingsIcon size={16} />
           </button>
         </header>
+
+        {!hasGroqKey && (
+          <div 
+            onClick={() => setShowSettings(true)}
+            className="mx-5 mt-4 p-3 bg-[#F59E0B]/10 border border-[#F59E0B]/20 rounded-xl flex gap-2.5 items-start cursor-pointer hover:bg-[#F59E0B]/15 transition-all group duration-200"
+          >
+            <AlertTriangle size={16} className="text-[#F59E0B] shrink-0 mt-0.5 animate-pulse" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold text-[#F59E0B] group-hover:text-[#FBBF24]">
+                Missing Groq API Key
+              </span>
+              <span className="text-[10px] text-white/60 leading-normal">
+                Please click to open settings and configure your key.
+              </span>
+            </div>
+          </div>
+        )}
  
         <IngestPanel onIngested={onIngested} />
 

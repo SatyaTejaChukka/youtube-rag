@@ -1,12 +1,17 @@
+from typing import Any
 from fastapi import APIRouter
-
+from app.config import settings
 
 router = APIRouter()
 
 
 @router.get("/health")
-async def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+async def health_check() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "has_groq_api_key": bool(settings.groq_api_key)
+    }
+
 
 
 @router.get("/health/diagnostics")
